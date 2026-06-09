@@ -23,6 +23,18 @@ local CORNER_OFFSETS = {
 
 local ESP_Cache = {}
 
+-- ScreenGui for BillboardGui-style Text labels (uses Roblox fonts)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name            = "EnvyFlagsGui"
+ScreenGui.ResetOnSpawn    = false
+ScreenGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset  = true
+ScreenGui.Parent          = game:GetService("CoreGui")
+
+local FLAG_FONT     = Enum.Font.SciFi
+local FLAG_TEXTSIZE = 13
+local FLAG_PADDING  = 4  -- px gap between box right edge and flags
+
 local function GetHealthPercent(player, humanoid)
     if game.PlaceId == 286090429 then
         local ok, v = pcall(function()
@@ -44,6 +56,23 @@ local function NewSquare(color, zindex, filled)
     return s
 end
 
+-- Creates a single TextLabel for one flag line
+local function NewFlagLabel()
+    local lbl = Instance.new("TextLabel")
+    lbl.BackgroundTransparency = 1
+    lbl.TextTransparency       = 0
+    lbl.Font                   = FLAG_FONT
+    lbl.TextSize               = FLAG_TEXTSIZE
+    lbl.TextXAlignment         = Enum.TextXAlignment.Left
+    lbl.TextYAlignment         = Enum.TextYAlignment.Top
+    lbl.TextStrokeTransparency = 0.5
+    lbl.TextStrokeColor3       = BLACK
+    lbl.Visible                = false
+    lbl.Size                   = UDim2.new(0, 120, 0, FLAG_TEXTSIZE + 2)
+    lbl.Parent                 = ScreenGui
+    return lbl
+end
+
 local function CreateESP(Player)
     if Player == LocalPlayer then return end
     ESP_Cache[Player] = {
@@ -53,6 +82,8 @@ local function CreateESP(Player)
         HealthBG       = NewSquare(BLACK, 3, true),
         HealthBar      = NewSquare(getgenv().Envy.Esp.Health.HealthColor, 4, true),
         HealthOutline1 = NewSquare(BLACK, 2),
+        -- Flag labels (pre-allocate 3: Idle/Walking/Jumping max 2 shown but 3 slots safe)
+        FlagLabels     = { NewFlagLabel(), NewFlagLabel(), NewFlagLabel() },
     }
     Player.CharacterAdded:Connect(function(c) c:WaitForChild("HumanoidRootPart", 5) end)
 end
@@ -60,16 +91,28 @@ end
 local function RemoveESP(Player)
     local d = ESP_Cache[Player]
     if d then
-        for _, o in next, d do o:Remove() end
+        for _, lbl in next, d.FlagLabels do lbl:Destroy() end
+        for k, o in next, d do
+            if k ~= "FlagLabels" then o:Remove() end
+        end
         ESP_Cache[Player] = nil
     end
 end
 
 local function DestroyAllESP()
     for _, d in next, ESP_Cache do
-        for _, o in next, d do o:Remove() end
+        for _, lbl in next, d.FlagLabels do lbl:Destroy() end
+        for k, o in next, d do
+            if k ~= "FlagLabels" then o:Remove() end
+        end
     end
     ESP_Cache = {}
+end
+
+local function HideFlags(labels)
+    for _, lbl in next, labels do
+        lbl.Visible = false
+    end
 end
 
 local function Hide(d)
@@ -79,16 +122,41 @@ local function Hide(d)
     d.HealthBG.Visible       = false
     d.HealthBar.Visible      = false
     d.HealthOutline1.Visible = false
+    HideFlags(d.FlagLabels)
+end
+
+-- Returns list of active flag strings for a humanoid
+local function GetFlags(humanoid)
+    local flags = {}
+    local moveDir = humanoid.MoveDirection
+    local isMoving = moveDir.Magnitude > 0.1
+
+    if humanoid.FloorMaterial == Enum.Material.Air then
+        table.insert(flags, "Jumping")
+    end
+
+    if isMoving then
+        table.insert(flags, "Walking")
+    end
+
+    if #flags == 0 then
+        table.insert(flags, "Idle")
+    end
+
+    return flags
 end
 
 local function UpdateESP()
     local Envy          = getgenv().Envy
     local espBox        = Envy.Esp.Box
     local espHealth     = Envy.Esp.Health
+    local espFlags      = Envy.Esp.Flags
     local teamCheck     = Envy.Silent.Globals.TeamCheck
     local localTeam     = LocalPlayer.Team
     local boxEnabled    = espBox.Enabled
     local healthEnabled = espHealth.Enabled
+    local flagsEnabled  = espFlags.Enabled
+    local flagColor     = espFlags.Color
     local boxColor      = espBox.BoxColor
     local healthColor   = espHealth.HealthColor
 
@@ -139,6 +207,7 @@ local function UpdateESP()
         local SW = mfloor(MaxX - MinX)
         local SH = mfloor(MaxY - MinY)
 
+        -- Box
         if boxEnabled then
             D.Main.Color    = boxColor
             D.Main.Position = v2new(PX, PY)
@@ -158,6 +227,7 @@ local function UpdateESP()
             D.Outline2.Visible = false
         end
 
+        -- Health bar
         if healthEnabled then
             local BW = 2
             local BX = PX - 5
@@ -181,6 +251,27 @@ local function UpdateESP()
             D.HealthBG.Visible       = false
             D.HealthBar.Visible      = false
             D.HealthOutline1.Visible = false
+        end
+
+        -- Flags (right side of box, starting at top, stacked downward)
+        if flagsEnabled then
+            local flags = GetFlags(Hum)
+            local labelX = PX + SW + FLAG_PADDING  -- right of box + gap
+            local labelY = PY                       -- starts at top of box, never goes below
+
+            for i, lbl in next, D.FlagLabels do
+                local flag = flags[i]
+                if flag then
+                    lbl.Position  = UDim2.new(0, labelX, 0, labelY + (i - 1) * (FLAG_TEXTSIZE + 2))
+                    lbl.Text      = flag
+                    lbl.TextColor3 = flagColor
+                    lbl.Visible   = true
+                else
+                    lbl.Visible = false
+                end
+            end
+        else
+            HideFlags(D.FlagLabels)
         end
     end
 end
