@@ -1,15 +1,6 @@
--- Envy | Chams Module
+-- Envy | Chams Module (Single Box)
 local Players     = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local v3new       = Vector3.new
-
-local BODY_PARTS = {
-    "Head","UpperTorso","LowerTorso","Torso",
-    "LeftUpperArm","LeftLowerArm","LeftHand",
-    "RightUpperArm","RightLowerArm","RightHand",
-    "LeftUpperLeg","LeftLowerLeg","LeftFoot",
-    "RightUpperLeg","RightLowerLeg","RightFoot"
-}
 
 local function shouldApplyChams(character)
     if not character then return false end
@@ -22,32 +13,25 @@ local function shouldApplyChams(character)
 end
 
 local function createChams(character)
-    if not shouldApplyChams(character) then
-        local f = character:FindFirstChild("EnvyBoxChams")
-        if f then f:Destroy() end
-        return
-    end
-    local f = character:FindFirstChild("EnvyBoxChams")
-    if f then f:Destroy() end
+    -- Clean up existing
+    local existing = character:FindFirstChild("EnvyBoxChams")
+    if existing then existing:Destroy() end
+
+    if not shouldApplyChams(character) then return end
 
     local cs     = getgenv().Envy.Esp.Chams
     local folder = Instance.new("Folder")
     folder.Name   = "EnvyBoxChams"
     folder.Parent = character
 
-    for _, name in next, BODY_PARTS do
-        local part = character:FindFirstChild(name)
-        if part and part:IsA("BasePart") then
-            local b = Instance.new("BoxHandleAdornment")
-            b.Adornee      = part
-            b.Color3       = cs.ChamsColor
-            b.Transparency = cs.Transparency
-            b.Size         = part.Size + v3new(0.08, 0.08, 0.08)
-            b.AlwaysOnTop  = true
-            b.ZIndex       = 10
-            b.Parent       = folder
-        end
-    end
+    -- Single SelectionBox covering the whole character model
+    local box = Instance.new("SelectionBox")
+    box.Adornee        = character          -- wraps the entire model
+    box.Color3         = cs.ChamsColor
+    box.SurfaceColor3  = cs.ChamsColor
+    box.SurfaceTransparency = cs.Transparency
+    box.LineThickness  = 0.05              -- adjust to taste
+    box.Parent         = folder
 end
 
 local function refreshAllChams()
